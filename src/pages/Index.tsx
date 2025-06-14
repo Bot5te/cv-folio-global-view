@@ -151,8 +151,15 @@ const Index = () => {
       <div className="container mx-auto px-4 py-8">
         {/* Header */}
         <div className="text-center mb-8">
+          <div className="flex items-center justify-center mb-4">
+            <img 
+              src="/lovable-uploads/77c6b850-0a48-44da-9074-b3f7e0b941b9.png" 
+              alt="إنجاز وجدارة للاستقدام العمالة المنزلية" 
+              className="h-20 w-auto"
+            />
+          </div>
           <h1 className="text-4xl font-bold text-gray-800 mb-2">
-            إدارة السيفيات
+            إنجاز وجدارة للاستقدام العمالة المنزلية
           </h1>
           <p className="text-gray-600 text-lg">
             نظام متكامل لإدارة سيفيات العمال حسب الجنسية
