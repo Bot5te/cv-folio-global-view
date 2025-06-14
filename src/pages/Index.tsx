@@ -1,6 +1,5 @@
-
-import React, { useState, useRef, useEffect } from 'react';
-import { Plus, FileText, Image, Trash2, Download, Users, Eye, Settings } from 'lucide-react';
+import React, { useState, useRef } from 'react';
+import { Plus, FileText, Image, Trash2, Download, Users, Eye, X, Settings } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -9,7 +8,16 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Badge } from '@/components/ui/badge';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { useToast } from '@/hooks/use-toast';
-import { CV, getCVs, insertCV, deleteCV, uploadFile } from '@/lib/supabase';
+
+interface CV {
+  id: string;
+  name: string;
+  age: number;
+  nationality: string;
+  file: File;
+  fileType: 'pdf' | 'image';
+  uploadDate: Date;
+}
 
 const nationalities = [
   { value: 'philippines', label: 'الفلبين', flag: '🇵🇭' },
@@ -19,7 +27,6 @@ const nationalities = [
 
 const Index = () => {
   const [cvs, setCvs] = useState<CV[]>([]);
-  const [loading, setLoading] = useState(true);
   const [selectedNationality, setSelectedNationality] = useState<string>('all');
   const [workerName, setWorkerName] = useState('');
   const [workerAge, setWorkerAge] = useState('');
@@ -28,30 +35,8 @@ const Index = () => {
   const [isAdmin, setIsAdmin] = useState(false);
   const [passwordInput, setPasswordInput] = useState('');
   const [showPasswordDialog, setShowPasswordDialog] = useState(false);
-  const [uploading, setUploading] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const { toast } = useToast();
-
-  // Load CVs from Supabase on component mount
-  useEffect(() => {
-    loadCVs();
-  }, []);
-
-  const loadCVs = async () => {
-    try {
-      const data = await getCVs();
-      setCvs(data);
-    } catch (error) {
-      console.error('Error loading CVs:', error);
-      toast({
-        title: 'خطأ',
-        description: 'فشل في تحميل البيانات',
-        variant: 'destructive'
-      });
-    } finally {
-      setLoading(false);
-    }
-  };
 
   const handlePasswordCheck = () => {
     if (passwordInput === '33356') {
@@ -80,7 +65,7 @@ const Index = () => {
     });
   };
 
-  const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (!file || !workerName || !workerAge || !uploadNationality) {
       toast({
@@ -101,78 +86,48 @@ const Index = () => {
       return;
     }
 
-    setUploading(true);
-    try {
-      const fileType = file.type.includes('pdf') ? 'pdf' : 'image';
-      const fileName = `${Date.now()}_${file.name}`;
-      
-      // Upload file to Supabase storage
-      const { publicUrl } = await uploadFile(file, fileName);
-      
-      // Save CV data to database
-      const cvData = {
-        name: workerName,
-        age: age,
-        nationality: uploadNationality,
-        file_name: fileName,
-        file_type: fileType,
-        file_url: publicUrl
-      };
-      
-      const newCV = await insertCV(cvData);
-      setCvs(prev => [newCV, ...prev]);
-      
-      // Reset form
-      setWorkerName('');
-      setWorkerAge('');
-      setUploadNationality('');
-      if (fileInputRef.current) {
-        fileInputRef.current.value = '';
-      }
+    const fileType = file.type.includes('pdf') ? 'pdf' : 'image';
+    const newCV: CV = {
+      id: Date.now().toString(),
+      name: workerName,
+      age: age,
+      nationality: uploadNationality,
+      file: file,
+      fileType: fileType,
+      uploadDate: new Date()
+    };
 
-      toast({
-        title: 'تم بنجاح',
-        description: 'تم رفع السيفي وحفظه في قاعدة البيانات'
-      });
-    } catch (error) {
-      console.error('Error uploading CV:', error);
-      toast({
-        title: 'خطأ',
-        description: 'فشل في رفع الملف',
-        variant: 'destructive'
-      });
-    } finally {
-      setUploading(false);
+    setCvs(prev => [...prev, newCV]);
+    setWorkerName('');
+    setWorkerAge('');
+    setUploadNationality('');
+    if (fileInputRef.current) {
+      fileInputRef.current.value = '';
     }
+
+    toast({
+      title: 'تم بنجاح',
+      description: 'تم رفع السيفي بنجاح'
+    });
   };
 
-  const handleDeleteCV = async (cv: CV) => {
-    try {
-      await deleteCV(cv.id, cv.file_name);
-      setCvs(prev => prev.filter(item => item.id !== cv.id));
-      toast({
-        title: 'تم الحذف',
-        description: 'تم حذف السيفي بنجاح'
-      });
-    } catch (error) {
-      console.error('Error deleting CV:', error);
-      toast({
-        title: 'خطأ',
-        description: 'فشل في حذف السيفي',
-        variant: 'destructive'
-      });
-    }
+  const handleDeleteCV = (id: string) => {
+    setCvs(prev => prev.filter(cv => cv.id !== id));
+    toast({
+      title: 'تم الحذف',
+      description: 'تم حذف السيفي بنجاح'
+    });
   };
 
   const handleDownloadCV = (cv: CV) => {
-    if (cv.file_url) {
-      const a = document.createElement('a');
-      a.href = cv.file_url;
-      a.download = `${cv.name}_CV.${cv.file_type === 'pdf' ? 'pdf' : 'jpg'}`;
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-    }
+    const url = URL.createObjectURL(cv.file);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `${cv.name}_CV.${cv.fileType === 'pdf' ? 'pdf' : 'jpg'}`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
   };
 
   const handlePreviewFile = (cv: CV) => {
@@ -190,17 +145,6 @@ const Index = () => {
     }));
     return stats;
   };
-
-  if (loading) {
-    return (
-      <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 flex items-center justify-center">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-16 w-16 border-b-2 border-blue-600 mx-auto mb-4"></div>
-          <p className="text-gray-600">جاري تحميل البيانات...</p>
-        </div>
-      </div>
-    );
-  }
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100">
@@ -281,7 +225,6 @@ const Index = () => {
                     value={workerName}
                     onChange={(e) => setWorkerName(e.target.value)}
                     className="text-right"
-                    disabled={uploading}
                   />
                 </div>
                 
@@ -296,13 +239,12 @@ const Index = () => {
                     value={workerAge}
                     onChange={(e) => setWorkerAge(e.target.value)}
                     className="text-right"
-                    disabled={uploading}
                   />
                 </div>
                 
                 <div>
                   <Label htmlFor="nationality">الجنسية</Label>
-                  <Select value={uploadNationality} onValueChange={setUploadNationality} disabled={uploading}>
+                  <Select value={uploadNationality} onValueChange={setUploadNationality}>
                     <SelectTrigger>
                       <SelectValue placeholder="اختر الجنسية" />
                     </SelectTrigger>
@@ -328,19 +270,9 @@ const Index = () => {
                     accept=".pdf,image/*"
                     onChange={handleFileUpload}
                     className="cursor-pointer"
-                    disabled={uploading}
                   />
                 </div>
               </div>
-              
-              {uploading && (
-                <div className="text-center py-4">
-                  <div className="inline-flex items-center gap-2">
-                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-600"></div>
-                    <span className="text-sm text-gray-600">جاري رفع الملف...</span>
-                  </div>
-                </div>
-              )}
               
               <p className="text-sm text-gray-500 text-center">
                 يمكنك رفع ملفات PDF أو صور (JPG, PNG)
@@ -406,7 +338,7 @@ const Index = () => {
                         </Badge>
                       </div>
                       <div className="flex items-center gap-1">
-                        {cv.file_type === 'pdf' ? (
+                        {cv.fileType === 'pdf' ? (
                           <FileText className="h-6 w-6 text-red-500" />
                         ) : (
                           <Image className="h-6 w-6 text-green-500" />
@@ -415,7 +347,7 @@ const Index = () => {
                     </div>
                     
                     <p className="text-sm text-gray-500 mb-4">
-                      تم الرفع: {new Date(cv.upload_date).toLocaleDateString('ar-SA')}
+                      تم الرفع: {cv.uploadDate.toLocaleDateString('ar-SA')}
                     </p>
                     
                     <div className="flex gap-2 flex-wrap">
@@ -438,15 +370,15 @@ const Index = () => {
                             </DialogTitle>
                           </DialogHeader>
                           <div className="mt-4">
-                            {cv.file_type === 'pdf' ? (
+                            {cv.fileType === 'pdf' ? (
                               <iframe
-                                src={cv.file_url || ''}
+                                src={URL.createObjectURL(cv.file)}
                                 className="w-full h-96 border rounded"
                                 title={`CV - ${cv.name}`}
                               />
                             ) : (
                               <img
-                                src={cv.file_url || ''}
+                                src={URL.createObjectURL(cv.file)}
                                 alt={`CV - ${cv.name}`}
                                 className="w-full max-h-96 object-contain rounded"
                               />
@@ -469,7 +401,7 @@ const Index = () => {
                         <Button
                           variant="destructive"
                           size="sm"
-                          onClick={() => handleDeleteCV(cv)}
+                          onClick={() => handleDeleteCV(cv.id)}
                           className="flex-1"
                         >
                           <Trash2 className="h-4 w-4 ml-1" />
