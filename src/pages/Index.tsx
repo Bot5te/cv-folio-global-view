@@ -1,4 +1,5 @@
-import React, { useState, useRef } from 'react';
+
+import React, { useState, useRef, useEffect } from 'react';
 import { Plus, FileText, Image, Trash2, Download, Users, Eye, X, Settings } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -8,16 +9,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Badge } from '@/components/ui/badge';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { useToast } from '@/hooks/use-toast';
-
-interface CV {
-  id: string;
-  name: string;
-  age: number;
-  nationality: string;
-  file: File;
-  fileType: 'pdf' | 'image';
-  uploadDate: Date;
-}
+import { uploadCV, getCVs, deleteCV, getFileUrl, CV } from '@/lib/supabase';
 
 const nationalities = [
   { value: 'philippines', label: 'الفلبين', flag: '🇵🇭' },
@@ -35,8 +27,30 @@ const Index = () => {
   const [isAdmin, setIsAdmin] = useState(false);
   const [passwordInput, setPasswordInput] = useState('');
   const [showPasswordDialog, setShowPasswordDialog] = useState(false);
+  const [loading, setLoading] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const { toast } = useToast();
+
+  // Load CVs from Supabase on component mount
+  useEffect(() => {
+    loadCVs();
+  }, []);
+
+  const loadCVs = async () => {
+    try {
+      setLoading(true);
+      const data = await getCVs();
+      setCvs(data);
+    } catch (error) {
+      toast({
+        title: 'خطأ',
+        description: 'فشل في تحميل البيانات',
+        variant: 'destructive'
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const handlePasswordCheck = () => {
     if (passwordInput === '33356') {
@@ -65,7 +79,7 @@ const Index = () => {
     });
   };
 
-  const handleFileUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (!file || !workerName || !workerAge || !uploadNationality) {
       toast({
@@ -86,48 +100,74 @@ const Index = () => {
       return;
     }
 
-    const fileType = file.type.includes('pdf') ? 'pdf' : 'image';
-    const newCV: CV = {
-      id: Date.now().toString(),
-      name: workerName,
-      age: age,
-      nationality: uploadNationality,
-      file: file,
-      fileType: fileType,
-      uploadDate: new Date()
-    };
+    try {
+      setLoading(true);
+      const fileType = file.type.includes('pdf') ? 'pdf' : 'image';
+      
+      const cvData = {
+        name: workerName,
+        age: age,
+        nationality: uploadNationality,
+        file_name: file.name,
+        file_type: fileType as 'pdf' | 'image'
+      };
 
-    setCvs(prev => [...prev, newCV]);
-    setWorkerName('');
-    setWorkerAge('');
-    setUploadNationality('');
-    if (fileInputRef.current) {
-      fileInputRef.current.value = '';
+      await uploadCV(cvData, file);
+      
+      // Reload CVs
+      await loadCVs();
+
+      // Reset form
+      setWorkerName('');
+      setWorkerAge('');
+      setUploadNationality('');
+      if (fileInputRef.current) {
+        fileInputRef.current.value = '';
+      }
+
+      toast({
+        title: 'تم بنجاح',
+        description: 'تم رفع السيفي بنجاح'
+      });
+    } catch (error) {
+      toast({
+        title: 'خطأ',
+        description: 'فشل في رفع السيفي',
+        variant: 'destructive'
+      });
+    } finally {
+      setLoading(false);
     }
-
-    toast({
-      title: 'تم بنجاح',
-      description: 'تم رفع السيفي بنجاح'
-    });
   };
 
-  const handleDeleteCV = (id: string) => {
-    setCvs(prev => prev.filter(cv => cv.id !== id));
-    toast({
-      title: 'تم الحذف',
-      description: 'تم حذف السيفي بنجاح'
-    });
+  const handleDeleteCV = async (cv: CV) => {
+    try {
+      setLoading(true);
+      await deleteCV(cv.id, cv.file_path);
+      await loadCVs();
+      toast({
+        title: 'تم الحذف',
+        description: 'تم حذف السيفي بنجاح'
+      });
+    } catch (error) {
+      toast({
+        title: 'خطأ',
+        description: 'فشل في حذف السيفي',
+        variant: 'destructive'
+      });
+    } finally {
+      setLoading(false);
+    }
   };
 
   const handleDownloadCV = (cv: CV) => {
-    const url = URL.createObjectURL(cv.file);
+    const url = getFileUrl(cv.file_path);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `${cv.name}_CV.${cv.fileType === 'pdf' ? 'pdf' : 'jpg'}`;
+    a.download = cv.file_name;
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
-    URL.revokeObjectURL(url);
   };
 
   const handlePreviewFile = (cv: CV) => {
@@ -225,6 +265,7 @@ const Index = () => {
                     value={workerName}
                     onChange={(e) => setWorkerName(e.target.value)}
                     className="text-right"
+                    disabled={loading}
                   />
                 </div>
                 
@@ -239,12 +280,13 @@ const Index = () => {
                     value={workerAge}
                     onChange={(e) => setWorkerAge(e.target.value)}
                     className="text-right"
+                    disabled={loading}
                   />
                 </div>
                 
                 <div>
                   <Label htmlFor="nationality">الجنسية</Label>
-                  <Select value={uploadNationality} onValueChange={setUploadNationality}>
+                  <Select value={uploadNationality} onValueChange={setUploadNationality} disabled={loading}>
                     <SelectTrigger>
                       <SelectValue placeholder="اختر الجنسية" />
                     </SelectTrigger>
@@ -270,6 +312,7 @@ const Index = () => {
                     accept=".pdf,image/*"
                     onChange={handleFileUpload}
                     className="cursor-pointer"
+                    disabled={loading}
                   />
                 </div>
               </div>
@@ -306,9 +349,16 @@ const Index = () => {
           </CardContent>
         </Card>
 
+        {/* Loading Indicator */}
+        {loading && (
+          <div className="text-center py-4">
+            <p className="text-gray-600">جاري التحميل...</p>
+          </div>
+        )}
+
         {/* CVs Grid */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {filteredCvs.length === 0 ? (
+          {filteredCvs.length === 0 && !loading ? (
             <div className="col-span-full text-center py-12">
               <FileText className="h-16 w-16 text-gray-300 mx-auto mb-4" />
               <p className="text-gray-500 text-lg">
@@ -338,7 +388,7 @@ const Index = () => {
                         </Badge>
                       </div>
                       <div className="flex items-center gap-1">
-                        {cv.fileType === 'pdf' ? (
+                        {cv.file_type === 'pdf' ? (
                           <FileText className="h-6 w-6 text-red-500" />
                         ) : (
                           <Image className="h-6 w-6 text-green-500" />
@@ -347,7 +397,7 @@ const Index = () => {
                     </div>
                     
                     <p className="text-sm text-gray-500 mb-4">
-                      تم الرفع: {cv.uploadDate.toLocaleDateString('ar-SA')}
+                      تم الرفع: {new Date(cv.upload_date).toLocaleDateString('ar-SA')}
                     </p>
                     
                     <div className="flex gap-2 flex-wrap">
@@ -370,15 +420,15 @@ const Index = () => {
                             </DialogTitle>
                           </DialogHeader>
                           <div className="mt-4">
-                            {cv.fileType === 'pdf' ? (
+                            {cv.file_type === 'pdf' ? (
                               <iframe
-                                src={URL.createObjectURL(cv.file)}
+                                src={getFileUrl(cv.file_path)}
                                 className="w-full h-96 border rounded"
                                 title={`CV - ${cv.name}`}
                               />
                             ) : (
                               <img
-                                src={URL.createObjectURL(cv.file)}
+                                src={getFileUrl(cv.file_path)}
                                 alt={`CV - ${cv.name}`}
                                 className="w-full max-h-96 object-contain rounded"
                               />
@@ -401,8 +451,9 @@ const Index = () => {
                         <Button
                           variant="destructive"
                           size="sm"
-                          onClick={() => handleDeleteCV(cv.id)}
+                          onClick={() => handleDeleteCV(cv)}
                           className="flex-1"
+                          disabled={loading}
                         >
                           <Trash2 className="h-4 w-4 ml-1" />
                           حذف
