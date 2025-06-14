@@ -1,6 +1,5 @@
-
 import React, { useState, useRef } from 'react';
-import { Plus, FileText, Image, Trash2, Download, Users, Eye, X } from 'lucide-react';
+import { Plus, FileText, Image, Trash2, Download, Users, Eye, X, Settings } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -33,11 +32,38 @@ const Index = () => {
   const [workerAge, setWorkerAge] = useState('');
   const [uploadNationality, setUploadNationality] = useState('');
   const [previewFile, setPreviewFile] = useState<CV | null>(null);
+  const [isAdmin, setIsAdmin] = useState(false);
+  const [passwordInput, setPasswordInput] = useState('');
+  const [showPasswordDialog, setShowPasswordDialog] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const { toast } = useToast();
 
-  // Check if user is admin by looking for admin11 in URL
-  const isAdmin = window.location.href.includes('admin11');
+  const handlePasswordCheck = () => {
+    if (passwordInput === '33356') {
+      setIsAdmin(true);
+      setShowPasswordDialog(false);
+      setPasswordInput('');
+      toast({
+        title: 'تم الدخول بنجاح',
+        description: 'تم تفعيل وضع الأدمن'
+      });
+    } else {
+      toast({
+        title: 'خطأ',
+        description: 'كلمة المرور غير صحيحة',
+        variant: 'destructive'
+      });
+      setPasswordInput('');
+    }
+  };
+
+  const handleLogout = () => {
+    setIsAdmin(false);
+    toast({
+      title: 'تم تسجيل الخروج',
+      description: 'تم إلغاء وضع الأدمن'
+    });
+  };
 
   const handleFileUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
@@ -132,9 +158,14 @@ const Index = () => {
             نظام متكامل لإدارة سيفيات العمال حسب الجنسية
           </p>
           {isAdmin && (
-            <Badge variant="destructive" className="mt-2">
-              وضع الأدمن مفعل
-            </Badge>
+            <div className="flex items-center justify-center gap-2 mt-2">
+              <Badge variant="destructive">
+                وضع الأدمن مفعل
+              </Badge>
+              <Button variant="outline" size="sm" onClick={handleLogout}>
+                تسجيل خروج
+              </Button>
+            </div>
           )}
         </div>
 
@@ -377,6 +408,60 @@ const Index = () => {
             })
           )}
         </div>
+
+        {/* Control Panel Button - Fixed at bottom */}
+        {!isAdmin && (
+          <div className="fixed bottom-6 left-1/2 transform -translate-x-1/2 z-50">
+            <Dialog open={showPasswordDialog} onOpenChange={setShowPasswordDialog}>
+              <DialogTrigger asChild>
+                <Button 
+                  className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-full shadow-lg"
+                  size="lg"
+                >
+                  <Settings className="h-5 w-5 ml-2" />
+                  لوحة التحكم
+                </Button>
+              </DialogTrigger>
+              <DialogContent className="sm:max-w-md">
+                <DialogHeader>
+                  <DialogTitle className="text-right">دخول لوحة التحكم</DialogTitle>
+                </DialogHeader>
+                <div className="space-y-4">
+                  <div>
+                    <Label htmlFor="password">كلمة المرور</Label>
+                    <Input
+                      id="password"
+                      type="password"
+                      placeholder="أدخل كلمة المرور"
+                      value={passwordInput}
+                      onChange={(e) => setPasswordInput(e.target.value)}
+                      onKeyPress={(e) => e.key === 'Enter' && handlePasswordCheck()}
+                      className="text-right"
+                    />
+                  </div>
+                  <div className="flex gap-2">
+                    <Button 
+                      onClick={handlePasswordCheck}
+                      className="flex-1"
+                    >
+                      دخول
+                    </Button>
+                    <Button 
+                      variant="outline" 
+                      onClick={() => {
+                        setShowPasswordDialog(false);
+                        setPasswordInput('');
+                      }}
+                      className="flex-1"
+                    >
+                      إلغاء
+                    </Button>
+                  </div>
+                </div>
+              </DialogContent>
+            </Dialog>
+          </div>
+        )}
       </div>
     </div>
   );
