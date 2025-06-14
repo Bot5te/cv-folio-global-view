@@ -464,7 +464,7 @@ const Index = () => {
                         setShowPasswordDialog(false);
                         setPasswordInput('');
                       }}
-                      ClassName="flex-1"
+                      className="flex-1"
                     >
                       إلغاء
                     </Button>
