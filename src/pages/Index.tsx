@@ -8,7 +8,16 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Badge } from '@/components/ui/badge';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { useToast } from '@/hooks/use-toast';
-import { useCVDatabase } from '@/hooks/useCVDatabase';
+
+interface CV {
+  id: string;
+  name: string;
+  age: number;
+  nationality: string;
+  file: File;
+  fileType: 'pdf' | 'image';
+  uploadDate: Date;
+}
 
 const nationalities = [
   { value: 'philippines', label: 'الفلبين', flag: '🇵🇭' },
@@ -17,11 +26,12 @@ const nationalities = [
 ];
 
 const Index = () => {
-  const { cvs, loading, addCV, deleteCV } = useCVDatabase();
+  const [cvs, setCvs] = useState<CV[]>([]);
   const [selectedNationality, setSelectedNationality] = useState<string>('all');
   const [workerName, setWorkerName] = useState('');
   const [workerAge, setWorkerAge] = useState('');
   const [uploadNationality, setUploadNationality] = useState('');
+  const [previewFile, setPreviewFile] = useState<CV | null>(null);
   const [isAdmin, setIsAdmin] = useState(false);
   const [passwordInput, setPasswordInput] = useState('');
   const [showPasswordDialog, setShowPasswordDialog] = useState(false);
@@ -55,7 +65,7 @@ const Index = () => {
     });
   };
 
-  const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (!file || !workerName || !workerAge || !uploadNationality) {
       toast({
@@ -76,57 +86,52 @@ const Index = () => {
       return;
     }
 
-    try {
-      await addCV({
-        name: workerName,
-        age: age,
-        nationality: uploadNationality,
-        file: file
-      });
+    const fileType = file.type.includes('pdf') ? 'pdf' : 'image';
+    const newCV: CV = {
+      id: Date.now().toString(),
+      name: workerName,
+      age: age,
+      nationality: uploadNationality,
+      file: file,
+      fileType: fileType,
+      uploadDate: new Date()
+    };
 
-      setWorkerName('');
-      setWorkerAge('');
-      setUploadNationality('');
-      if (fileInputRef.current) {
-        fileInputRef.current.value = '';
-      }
-
-      toast({
-        title: 'تم بنجاح',
-        description: 'تم رفع السيفي بنجاح'
-      });
-    } catch (error) {
-      toast({
-        title: 'خطأ',
-        description: 'حدث خطأ أثناء رفع السيفي',
-        variant: 'destructive'
-      });
+    setCvs(prev => [...prev, newCV]);
+    setWorkerName('');
+    setWorkerAge('');
+    setUploadNationality('');
+    if (fileInputRef.current) {
+      fileInputRef.current.value = '';
     }
+
+    toast({
+      title: 'تم بنجاح',
+      description: 'تم رفع السيفي بنجاح'
+    });
   };
 
-  const handleDeleteCV = async (id: string) => {
-    try {
-      await deleteCV(id);
-      toast({
-        title: 'تم الحذف',
-        description: 'تم حذف السيفي بنجاح'
-      });
-    } catch (error) {
-      toast({
-        title: 'خطأ',
-        description: 'حدث خطأ أثناء حذف السيفي',
-        variant: 'destructive'
-      });
-    }
+  const handleDeleteCV = (id: string) => {
+    setCvs(prev => prev.filter(cv => cv.id !== id));
+    toast({
+      title: 'تم الحذف',
+      description: 'تم حذف السيفي بنجاح'
+    });
   };
 
-  const handleDownloadCV = (cv: any) => {
-    const link = document.createElement('a');
-    link.href = cv.fileData;
-    link.download = cv.fileName;
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
+  const handleDownloadCV = (cv: CV) => {
+    const url = URL.createObjectURL(cv.file);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `${cv.name}_CV.${cv.fileType === 'pdf' ? 'pdf' : 'jpg'}`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  };
+
+  const handlePreviewFile = (cv: CV) => {
+    setPreviewFile(cv);
   };
 
   const filteredCvs = selectedNationality === 'all' 
@@ -140,17 +145,6 @@ const Index = () => {
     }));
     return stats;
   };
-
-  if (loading) {
-    return (
-      <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 flex items-center justify-center">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
-          <p className="text-gray-600">جاري تحميل البيانات...</p>
-        </div>
-      </div>
-    );
-  }
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100">
@@ -362,6 +356,7 @@ const Index = () => {
                           <Button
                             variant="outline"
                             size="sm"
+                            onClick={() => handlePreviewFile(cv)}
                             className="flex-1"
                           >
                             <Eye className="h-4 w-4 ml-1" />
@@ -377,13 +372,13 @@ const Index = () => {
                           <div className="mt-4">
                             {cv.fileType === 'pdf' ? (
                               <iframe
-                                src={cv.fileData}
+                                src={URL.createObjectURL(cv.file)}
                                 className="w-full h-96 border rounded"
                                 title={`CV - ${cv.name}`}
                               />
                             ) : (
                               <img
-                                src={cv.fileData}
+                                src={URL.createObjectURL(cv.file)}
                                 alt={`CV - ${cv.name}`}
                                 className="w-full max-h-96 object-contain rounded"
                               />
@@ -464,7 +459,7 @@ const Index = () => {
                         setShowPasswordDialog(false);
                         setPasswordInput('');
                       }}
-                      ClassName="flex-1"
+                      className="flex-1"
                     >
                       إلغاء
                     </Button>
