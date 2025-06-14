@@ -1,6 +1,6 @@
 
 import { useState, useEffect } from 'react';
-import { getCVsFromStorage, saveCVToStorage, deleteCVFromStorage, CVData } from '@/lib/localStorage';
+import { getCVsFromDB, saveCVToDB, deleteCVFromDB } from '@/lib/mongodb';
 
 export interface CV {
   id: string;
@@ -20,7 +20,7 @@ export const useCVDatabase = () => {
   const loadCVs = async () => {
     try {
       setLoading(true);
-      const data = getCVsFromStorage();
+      const data = await getCVsFromDB();
       setCvs(data);
     } catch (error) {
       console.error('Error loading CVs:', error);
@@ -55,7 +55,7 @@ export const useCVDatabase = () => {
         uploadDate: new Date()
       };
 
-      const id = saveCVToStorage(newCVData);
+      const id = await saveCVToDB(newCVData);
       
       const newCV: CV = {
         id,
@@ -72,7 +72,7 @@ export const useCVDatabase = () => {
 
   const deleteCV = async (id: string) => {
     try {
-      deleteCVFromStorage(id);
+      await deleteCVFromDB(id);
       setCvs(prev => prev.filter(cv => cv.id !== id));
     } catch (error) {
       console.error('Error deleting CV:', error);
