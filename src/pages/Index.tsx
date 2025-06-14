@@ -1,17 +1,19 @@
 
 import React, { useState, useRef } from 'react';
-import { Plus, FileText, Image, Trash2, Download, Users } from 'lucide-react';
+import { Plus, FileText, Image, Trash2, Download, Users, Eye, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { useToast } from '@/hooks/use-toast';
 
 interface CV {
   id: string;
   name: string;
+  age: number;
   nationality: string;
   file: File;
   fileType: 'pdf' | 'image';
@@ -28,16 +30,31 @@ const Index = () => {
   const [cvs, setCvs] = useState<CV[]>([]);
   const [selectedNationality, setSelectedNationality] = useState<string>('all');
   const [workerName, setWorkerName] = useState('');
+  const [workerAge, setWorkerAge] = useState('');
   const [uploadNationality, setUploadNationality] = useState('');
+  const [previewFile, setPreviewFile] = useState<CV | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const { toast } = useToast();
 
+  // Check if user is admin by looking for admin11 in URL
+  const isAdmin = window.location.href.includes('admin11');
+
   const handleFileUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
-    if (!file || !workerName || !uploadNationality) {
+    if (!file || !workerName || !workerAge || !uploadNationality) {
       toast({
         title: 'خطأ',
-        description: 'يرجى إدخال اسم العامل واختيار الجنسية وتحديد الملف',
+        description: 'يرجى إدخال اسم العامل والسن واختيار الجنسية وتحديد الملف',
+        variant: 'destructive'
+      });
+      return;
+    }
+
+    const age = parseInt(workerAge);
+    if (isNaN(age) || age < 18 || age > 65) {
+      toast({
+        title: 'خطأ',
+        description: 'يرجى إدخال سن صحيح (18-65)',
         variant: 'destructive'
       });
       return;
@@ -47,6 +64,7 @@ const Index = () => {
     const newCV: CV = {
       id: Date.now().toString(),
       name: workerName,
+      age: age,
       nationality: uploadNationality,
       file: file,
       fileType: fileType,
@@ -55,6 +73,7 @@ const Index = () => {
 
     setCvs(prev => [...prev, newCV]);
     setWorkerName('');
+    setWorkerAge('');
     setUploadNationality('');
     if (fileInputRef.current) {
       fileInputRef.current.value = '';
@@ -85,6 +104,10 @@ const Index = () => {
     URL.revokeObjectURL(url);
   };
 
+  const handlePreviewFile = (cv: CV) => {
+    setPreviewFile(cv);
+  };
+
   const filteredCvs = selectedNationality === 'all' 
     ? cvs 
     : cvs.filter(cv => cv.nationality === selectedNationality);
@@ -108,6 +131,11 @@ const Index = () => {
           <p className="text-gray-600 text-lg">
             نظام متكامل لإدارة سيفيات العمال حسب الجنسية
           </p>
+          {isAdmin && (
+            <Badge variant="destructive" className="mt-2">
+              وضع الأدمن مفعل
+            </Badge>
+          )}
         </div>
 
         {/* Statistics Cards */}
@@ -139,65 +167,81 @@ const Index = () => {
           ))}
         </div>
 
-        {/* Upload Section */}
-        <Card className="mb-8 shadow-lg">
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2 text-xl">
-              <Plus className="h-6 w-6" />
-              إضافة سيفي جديد
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
-              <div>
-                <Label htmlFor="worker-name">اسم العامل</Label>
-                <Input
-                  id="worker-name"
-                  type="text"
-                  placeholder="أدخل اسم العامل"
-                  value={workerName}
-                  onChange={(e) => setWorkerName(e.target.value)}
-                  className="text-right"
-                />
+        {/* Upload Section - Only visible for admin */}
+        {isAdmin && (
+          <Card className="mb-8 shadow-lg">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2 text-xl">
+                <Plus className="h-6 w-6" />
+                إضافة سيفي جديد
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-4">
+                <div>
+                  <Label htmlFor="worker-name">اسم العامل</Label>
+                  <Input
+                    id="worker-name"
+                    type="text"
+                    placeholder="أدخل اسم العامل"
+                    value={workerName}
+                    onChange={(e) => setWorkerName(e.target.value)}
+                    className="text-right"
+                  />
+                </div>
+                
+                <div>
+                  <Label htmlFor="worker-age">السن</Label>
+                  <Input
+                    id="worker-age"
+                    type="number"
+                    placeholder="السن"
+                    min="18"
+                    max="65"
+                    value={workerAge}
+                    onChange={(e) => setWorkerAge(e.target.value)}
+                    className="text-right"
+                  />
+                </div>
+                
+                <div>
+                  <Label htmlFor="nationality">الجنسية</Label>
+                  <Select value={uploadNationality} onValueChange={setUploadNationality}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="اختر الجنسية" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {nationalities.map(nat => (
+                        <SelectItem key={nat.value} value={nat.value}>
+                          <div className="flex items-center gap-2">
+                            <span>{nat.flag}</span>
+                            <span>{nat.label}</span>
+                          </div>
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                
+                <div>
+                  <Label htmlFor="cv-file">ملف السيفي</Label>
+                  <Input
+                    id="cv-file"
+                    ref={fileInputRef}
+                    type="file"
+                    accept=".pdf,image/*"
+                    onChange={handleFileUpload}
+                    className="cursor-pointer"
+                  />
+                </div>
               </div>
               
-              <div>
-                <Label htmlFor="nationality">الجنسية</Label>
-                <Select value={uploadNationality} onValueChange={setUploadNationality}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="اختر الجنسية" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {nationalities.map(nat => (
-                      <SelectItem key={nat.value} value={nat.value}>
-                        <div className="flex items-center gap-2">
-                          <span>{nat.flag}</span>
-                          <span>{nat.label}</span>
-                        </div>
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-              
-              <div>
-                <Label htmlFor="cv-file">ملف السيفي</Label>
-                <Input
-                  id="cv-file"
-                  ref={fileInputRef}
-                  type="file"
-                  accept=".pdf,image/*"
-                  onChange={handleFileUpload}
-                  className="cursor-pointer"
-                />
-              </div>
-            </div>
-            
-            <p className="text-sm text-gray-500 text-center">
-              يمكنك رفع ملفات PDF أو صور (JPG, PNG)
-            </p>
-          </CardContent>
-        </Card>
+              <p className="text-sm text-gray-500 text-center">
+                يمكنك رفع ملفات PDF أو صور (JPG, PNG)
+              </p>
+            </CardContent>
+          </Card>
+        )}
 
         {/* Filter Section */}
         <Card className="mb-6">
@@ -244,9 +288,12 @@ const Index = () => {
                   <CardContent className="p-6">
                     <div className="flex items-start justify-between mb-4">
                       <div className="flex-1">
-                        <h3 className="text-lg font-semibold text-gray-800 mb-2">
+                        <h3 className="text-lg font-semibold text-gray-800 mb-1">
                           {cv.name}
                         </h3>
+                        <p className="text-sm text-gray-600 mb-2">
+                          السن: {cv.age} سنة
+                        </p>
                         <Badge variant="secondary" className="mb-2">
                           <span className="mr-1">{nationality?.flag}</span>
                           {nationality?.label}
@@ -265,7 +312,43 @@ const Index = () => {
                       تم الرفع: {cv.uploadDate.toLocaleDateString('ar-SA')}
                     </p>
                     
-                    <div className="flex gap-2">
+                    <div className="flex gap-2 flex-wrap">
+                      <Dialog>
+                        <DialogTrigger asChild>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => handlePreviewFile(cv)}
+                            className="flex-1"
+                          >
+                            <Eye className="h-4 w-4 ml-1" />
+                            معاينة
+                          </Button>
+                        </DialogTrigger>
+                        <DialogContent className="max-w-4xl max-h-[90vh] overflow-auto">
+                          <DialogHeader>
+                            <DialogTitle className="text-right">
+                              معاينة سيفي - {cv.name}
+                            </DialogTitle>
+                          </DialogHeader>
+                          <div className="mt-4">
+                            {cv.fileType === 'pdf' ? (
+                              <iframe
+                                src={URL.createObjectURL(cv.file)}
+                                className="w-full h-96 border rounded"
+                                title={`CV - ${cv.name}`}
+                              />
+                            ) : (
+                              <img
+                                src={URL.createObjectURL(cv.file)}
+                                alt={`CV - ${cv.name}`}
+                                className="w-full max-h-96 object-contain rounded"
+                              />
+                            )}
+                          </div>
+                        </DialogContent>
+                      </Dialog>
+                      
                       <Button
                         variant="outline"
                         size="sm"
@@ -275,15 +358,18 @@ const Index = () => {
                         <Download className="h-4 w-4 ml-1" />
                         تحميل
                       </Button>
-                      <Button
-                        variant="destructive"
-                        size="sm"
-                        onClick={() => handleDeleteCV(cv.id)}
-                        className="flex-1"
-                      >
-                        <Trash2 className="h-4 w-4 ml-1" />
-                        حذف
-                      </Button>
+                      
+                      {isAdmin && (
+                        <Button
+                          variant="destructive"
+                          size="sm"
+                          onClick={() => handleDeleteCV(cv.id)}
+                          className="flex-1"
+                        >
+                          <Trash2 className="h-4 w-4 ml-1" />
+                          حذف
+                        </Button>
+                      )}
                     </div>
                   </CardContent>
                 </Card>
