@@ -8,6 +8,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Badge } from '@/components/ui/badge';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { useToast } from '@/hooks/use-toast';
+import { useCVDatabase, CV } from '@/hooks/useCVDatabase';
 
 interface CV {
   id: string;
@@ -26,7 +27,7 @@ const nationalities = [
 ];
 
 const Index = () => {
-  const [cvs, setCvs] = useState<CV[]>([]);
+  const { cvs, loading, addCV, deleteCV } = useCVDatabase();
   const [selectedNationality, setSelectedNationality] = useState<string>('all');
   const [workerName, setWorkerName] = useState('');
   const [workerAge, setWorkerAge] = useState('');
@@ -65,7 +66,7 @@ const Index = () => {
     });
   };
 
-  const handleFileUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (!file || !workerName || !workerAge || !uploadNationality) {
       toast({
@@ -97,26 +98,17 @@ const Index = () => {
       uploadDate: new Date()
     };
 
-    setCvs(prev => [...prev, newCV]);
+    await addCV(newCV);
     setWorkerName('');
     setWorkerAge('');
     setUploadNationality('');
     if (fileInputRef.current) {
       fileInputRef.current.value = '';
     }
-
-    toast({
-      title: 'تم بنجاح',
-      description: 'تم رفع السيفي بنجاح'
-    });
   };
 
-  const handleDeleteCV = (id: string) => {
-    setCvs(prev => prev.filter(cv => cv.id !== id));
-    toast({
-      title: 'تم الحذف',
-      description: 'تم حذف السيفي بنجاح'
-    });
+  const handleDeleteCV = async (id: string) => {
+    await deleteCV(id);
   };
 
   const handleDownloadCV = (cv: CV) => {
@@ -146,6 +138,17 @@ const Index = () => {
     return stats;
   };
 
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 flex items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
+          <p className="text-gray-600">جاري تحميل البيانات من قاعدة البيانات...</p>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100">
       <div className="container mx-auto px-4 py-8">
@@ -162,7 +165,7 @@ const Index = () => {
             إنجاز وجدارة للاستقدام العمالة المنزلية
           </h1>
           <p className="text-gray-600 text-lg">
-            نظام متكامل لإدارة سيفيات العمال حسب الجنسية
+            نظام متكامل لإدارة سيفيات العمال حسب الجنسية - متصل بقاعدة بيانات MongoDB
           </p>
           {isAdmin && (
             <div className="flex items-center justify-center gap-2 mt-2">
@@ -275,7 +278,7 @@ const Index = () => {
               </div>
               
               <p className="text-sm text-gray-500 text-center">
-                يمكنك رفع ملفات PDF أو صور (JPG, PNG)
+                يمكنك رفع ملفات PDF أو صور (JPG, PNG) - سيتم حفظها في قاعدة بيانات MongoDB
               </p>
             </CardContent>
           </Card>
